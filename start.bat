@@ -12,6 +12,6 @@ REM Ждем 3 секунды для инициализации OPC-сервер
 timeout /t 3 /nobreak >nul
 
 REM Запускаем FastAPI приложение в ТЕКУЩЕМ окне
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 pause

@@ -9,10 +9,9 @@ import SystemStatus from './components/SystemStatus';
 import './App.css';
 
 function App() {
-  // ... (все твои хуки useState, useEffect, функции-обработчики остаются без изменений) ...
-  const [modelStatus, setModelStatus] = useState(null);
+  const [modelStatus, setModelStatus] = useState({});
   const [controlModes, setControlModes] = useState({});
-  const [simulationMode, setSimulationMode] = useState('running');
+  const [simulationMode, setSimulationMode] = useState(null);
   const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
@@ -22,8 +21,22 @@ function App() {
         api.getControlModes(),
         api.getSimulationMode(),
       ]);
-      
-      setModelStatus(statusRes.data);
+
+      const flatData = statusRes.data;
+
+      const grouped = {
+        pumps: {},
+        valves: {},
+        oil_systems: {}
+      };
+
+      for (const [key, value] of Object.entries(flatData)) {
+        if (key.startsWith("pump_")) grouped.pumps[key] = value;
+        else if (key.startsWith("valve_out_")) grouped.valves[key] = value;
+        else if (key.startsWith("oil_system_")) grouped.oil_systems[key] = value;
+      }
+
+      setModelStatus(grouped);
       setControlModes(modesRes.data);
       setSimulationMode(simModeRes.data.status);
       setError(null);
@@ -35,121 +48,51 @@ function App() {
 
   useEffect(() => {
     fetchData();
-    const intervalId = setInterval(fetchData, 2000);
-    return () => clearInterval(intervalId);
+    const interval = setInterval(fetchData, 1000);
+    return () => clearInterval(interval);
   }, [fetchData]);
-
-  const handleModeToggle = useCallback(async (fullComponentName, currentMode) => {
-    const targetMode = currentMode === 'MANUAL' ? 'MODEL' : 'MANUAL';
-    try {
-      await api.setControlMode(fullComponentName, targetMode);
-      fetchData();
-    } catch (err) {
-      console.error(`Ошибка при переключении режима для ${fullComponentName}:`, err);
-      setError(`Не удалось переключить режим для ${fullComponentName}.`);
-    }
-  }, [fetchData]);
-
-  const handlePause = async () => {
-    try {
-      await api.pauseSimulation();
-      fetchData();
-    } catch (err) {
-      console.error("Ошибка при постановке на паузу:", err);
-      setError("Не удалось поставить симуляцию на паузу.");
-    }
-  };
-
-  const handleResume = async () => {
-    try {
-      await api.resumeSimulation();
-      fetchData();
-    } catch (err) {
-      console.error("Ошибка при возобновлении симуляции:", err);
-      setError("Не удалось возобновить симуляцию.");
-    }
-  };
-  
-   const handleSync = async () => {
-    try {
-      console.log("Запускаем синхронизацию...");
-      await api.syncWithOpc();
-      // Можно добавить уведомление для пользователя
-      alert("Синхронизация с OPC-сервером запущена!");
-    } catch (err) {
-      console.error("Ошибка при запуске синхронизации:", err);
-      setError("Не удалось запустить синхронизацию.");
-    }
-  };
-
-  const renderComponents = (components, type) => {
-    if (!components) return null;
-    return Object.entries(components).map(([name, data]) => {
-      const fullComponentName = `${type}_${name}`;
-      const currentMode = controlModes[fullComponentName] || 'N/A';
-  
-      return (
-        <ComponentCard
-          key={fullComponentName}
-          name={name}
-          data={data}
-          mode={currentMode}
-          type={type}
-          onModeToggle={() => handleModeToggle(fullComponentName, controlModes[fullComponentName])}
-		  onSync={handleSync}
-        />
-      );
-    });
-  };
-
-  // --- 2. ГОТОВИМ ДАННЫЕ ДЛЯ НОВОГО КОМПОНЕНТА ---
-  // Безопасно извлекаем данные о давлении. Если modelStatus еще не загрузился,
-  // или в нем нет pipes, переменные будут undefined, и компонент это обработает.
-  const inletPressure = modelStatus?.pipes?.main_inlet?.pressure;
-  const outletPressure = modelStatus?.pipes?.main_outlet?.pressure;
 
   return (
     <div className="App">
-      <header className="App-header">
-        <h1>Панель управления цифровым двойником БКНС</h1>
-      </header>
+      <h1 className="text-2xl font-bold mb-4">Панель управления цифровым двойником БКНС</h1>
 
-      {error && <div className="error-message">{error}</div>}
+      <SimulationControls
+        fetchData={fetchData}
+        controlModes={controlModes}
+        simulationMode={simulationMode}
+        setSimulationMode={setSimulationMode}
+      />
 
-      <div className="top-panels">
-        <SimulationControls
-          mode={simulationMode}
-          onPause={handlePause}
-          onResume={handleResume}
-        />
-        {/* --- 3. ВСТАВЛЯЕМ НОВЫЙ КОМПОНЕНТ И ПЕРЕДАЕМ ДАННЫЕ --- */}
-        <SystemStatus
-          inletPressure={inletPressure}
-          outletPressure={outletPressure}
-        />
+      {error && <div className="text-red-500">{error}</div>}
+
+      <SystemStatus status={modelStatus} />
+
+      <div className="mt-6">
+        <h2 className="text-xl font-semibold mb-2">Насосы</h2>
+        <div className="grid grid-cols-2 gap-4">
+          {Object.entries(modelStatus.pumps || {}).map(([key, value]) => (
+            <ComponentCard key={key} name={key} data={value} />
+          ))}
+        </div>
       </div>
 
+      <div className="mt-6">
+        <h2 className="text-xl font-semibold mb-2">Клапаны</h2>
+        <div className="grid grid-cols-2 gap-4">
+          {Object.entries(modelStatus.valves || {}).map(([key, value]) => (
+            <ComponentCard key={key} name={key} data={value} />
+          ))}
+        </div>
+      </div>
 
-      {modelStatus ? (
-        <>
-          <h2>Насосы</h2>
-          <div className="components-grid">
-            {renderComponents(modelStatus.pumps, 'pump')}
-          </div>
-          
-          <h2>Клапаны</h2>
-          <div className="components-grid">
-            {renderComponents(modelStatus.valves, 'valve')}
-          </div>
-          
-          <h2>Маслосистемы</h2>
-          <div className="components-grid">
-            {renderComponents(modelStatus.oil_systems, 'oil_system')}
-          </div>
-        </>
-      ) : (
-        !error && <p>Загрузка данных с симуляции...</p>
-      )}
+      <div className="mt-6">
+        <h2 className="text-xl font-semibold mb-2">Маслосистемы</h2>
+        <div className="grid grid-cols-2 gap-4">
+          {Object.entries(modelStatus.oil_systems || {}).map(([key, value]) => (
+            <ComponentCard key={key} name={key} data={value} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

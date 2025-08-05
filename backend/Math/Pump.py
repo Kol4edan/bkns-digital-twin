@@ -9,8 +9,9 @@ class CentrifugalPump:
         # Pump parameters
         self.name = name
         self.bond_oil_system = bond_oil_system
-        self.p_in = 1.8  # МПа (входное давление)
-        self.p_out = 1.8
+        self.p_in_outside = 1.7
+        self.p_in = 1.7  # МПа (входное давление)
+        self.p_out = 1.7
         self.nominal_capacity = 45.0  # m^3/s
         self.nominal_head = 40.0  # m
         self.nominal_brake_power = 0.85  # kW
@@ -23,7 +24,7 @@ class CentrifugalPump:
         # Motor parameters
         self.nominal_current = 10.0  # A (номинальный ток двигателя)
         self.current_reduction_step = 0.1  # шаг уменьшения тока при остановке
-
+ 
         # Temperature parameters
         self.ambient_temp = 25.0  # °C (температура окружающей среды)
         self.max_operating_temp = 40.0  # °C (максимальная рабочая температура)
@@ -50,7 +51,7 @@ class CentrifugalPump:
         self.OPERATION_MODE_NORMAL = 0  # Штатный режим
         self.OPERATION_MODE_INLET_CLOSED = 1  # Закрыта входная задвижка
         self.OPERATION_MODE_OUTLET_CLOSED = 2  # Закрыта выходная задвижка
-        self.OPERATION_MODE_BOTH_CLOSED = 3  #  Обе задвижки закрыты
+        self.OPERATION_MODE_BOTH_CLOSED = 3  # ИЗМЕНЕНО: Обе задвижки закрыты
         self.operation_mode = self.OPERATION_MODE_NORMAL
         self.mode_change_time = 0.0  # Время последней смены режима
 
@@ -153,6 +154,7 @@ class CentrifugalPump:
                 current = self.nominal_current * (self.current_omega / self.reference_shaft_speed) * 0.7
             else:
                 current = self.nominal_current * (self.current_omega / self.reference_shaft_speed) * 1.3
+        #ИЗМЕНЕНО
         elif self.operation_mode == self.OPERATION_MODE_OUTLET_CLOSED:  
             # При закрытой выходной задвижке ток увеличивается
             current = self.nominal_current * (self.current_omega / self.reference_shaft_speed) * 1.5
@@ -267,6 +269,7 @@ class CentrifugalPump:
         if self.na_on:
             # Поведение насоса зависит от режима работы
             if self.operation_mode == self.OPERATION_MODE_NORMAL:
+                self.p_in = self.p_in_outside
                 delta_p = self.calculate_pressure_gain(q, rho)
                 self.p_out = self.p_in + (delta_p / 1e6)
                 self.NA_AI_Qmom_n = q * (self.current_omega / target_omega)
@@ -280,6 +283,7 @@ class CentrifugalPump:
             elif self.operation_mode == self.OPERATION_MODE_OUTLET_CLOSED:
                 # При закрытой выходной задвижке
                 delta_p = self.calculate_pressure_gain(0, rho)  # Расход нулевой
+                self.p_in = self.p_in_outside
                 self.p_out = self.p_in + (delta_p / 1e6)  # Давление на выходе растет
                 self.NA_AI_Qmom_n = 0.0  # Расход нулевой
 
@@ -305,7 +309,7 @@ class CentrifugalPump:
             self.OPERATION_MODE_NORMAL: "Штатный режим",
             self.OPERATION_MODE_INLET_CLOSED: "Закрыта входная задвижка",
             self.OPERATION_MODE_OUTLET_CLOSED: "Закрыта выходная задвижка",
-            self.OPERATION_MODE_BOTH_CLOSED: "Обe задвижки закрыты" 
+            self.OPERATION_MODE_BOTH_CLOSED: "Обe задвижки закрыты"  # ИЗМЕНЕНО
         }
         return modes.get(self.operation_mode, "Неизвестный режим")
 
@@ -315,6 +319,7 @@ class CentrifugalPump:
         return (f"{self.simulation_time:8.1f} | {self.current_omega:7.1f} | {self.current_motor_i:4.1f}A | "
                 f"{self.p_out:7.10f}MPa | {self.NA_AI_T_2_n:.1f}°C {self.NA_AI_T_3_n:.1f}°C "
                 f"{self.NA_AI_T_4_n:.1f}°C {self.NA_AI_T_5_n:.1f}°C | {self.NA_AI_Qmom_n:.2f}m³/s | {mode}")
+
 
 
 

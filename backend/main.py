@@ -8,12 +8,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import os
 
-from Math.BKNS import BKNS
-from opc_adapter import OPCAdapter
+from .Math.BKNS import BKNS
+from .opc_adapter import OPCAdapter
 
 # Глобальные переменные и конфигурация
-SERVER_URL = os.getenv("OPC_SERVER_URL", "opc.tcp://0.0.0.0:4840")
-if SERVER_URL == "opc.tcp://0.0.0.0:4840":
+SERVER_URL = os.getenv("OPC_SERVER_URL", "opc.tcp://localhost:4840/freeopcua/server/")
+if SERVER_URL == "opc.tcp://localhost:4840/freeopcua/server/":
     print("OPC_SERVER_URL from Docker compose is None, using default")
 
 simulation_is_running = asyncio.Event()

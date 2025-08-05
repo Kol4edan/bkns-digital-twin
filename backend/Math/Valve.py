@@ -137,6 +137,11 @@ class Valve:
                 # Остановлена в промежуточном положении
                 self.state = "stopped"     
 
+    def get_opening_coefficient(self) -> float:
+        """
+        Возвращает коэффициент пропускной способности от 0.0 (закрыта) до 1.0 (полностью открыта)
+        """
+        return self.current_position / 100.0
 
     def status(self) -> dict:
         """

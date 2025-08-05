@@ -1,9 +1,15 @@
 import time
-from typing import Dict, List
+from typing import Dict
 from .OilSystem import OilSystem
 from .Pump import CentrifugalPump
 from .Pipe import PipeModel
 from .Valve import Valve
+from .sensors.valve_sensors import ValveTemperatureSensor, ValvePressureSensor,ValvePositionSensor
+from .sensors.pump_sensors import PumpFlowSensor,PumpMotorCurrentSensor,PumpPressureSensor,PumpShaftSpeedSensor,PumpTemperatureSensor
+from .sensors.pipe_sensors import PipePressureSensor,PipeTemperatureSensor
+from .sensors.oil_sensors import  OilFlowSensor, OilTemperatureSensor
+from .sensors.tank_sensors import TankLevelSensor, TankDensitySensor, TankTemperatureSensor, TankFlowRateSensor
+
 
 class BKNS:
     """
@@ -67,6 +73,109 @@ class BKNS:
         self.m_dot_A = 0.5      # Массовый расход [кг/с]
         self.m_dot_B = 0.5      # Массовый расход [кг/с]
         
+        #Датчики
+        #Задвижки
+        self.valve_sensors = {}
+        for key in self.valves.keys():
+            self.valve_sensors[key] = {
+                'temperature_sensor': ValveTemperatureSensor(),
+                'pressure_sensor': ValvePressureSensor(),
+                'position_sensor': ValvePositionSensor()
+            }
+
+        #Насосы
+        self.pump_sensors = {}
+        for pump_id, pump in enumerate(self.pumps):
+            self.pump_sensors[pump_id] = {
+            'bearing_work_temp_sensor': PumpTemperatureSensor(),
+            'bearing_field_temp_sensor': PumpTemperatureSensor(),
+            'motor_bearing_work_temp_sensor': PumpTemperatureSensor(),
+            'motor_bearing_field_temp_sensor': PumpTemperatureSensor(),
+            'hydro_support_temp_sensor': PumpTemperatureSensor(),
+            'pressure_sensor': PumpPressureSensor(),
+            'motor_current_sensor': PumpMotorCurrentSensor(),
+            'flow_sensor': PumpFlowSensor(),
+            'shaft_speed_sensor': PumpShaftSpeedSensor()
+            }
+
+        #Трубы
+        self.pipe_sensors = {}
+        for key in self.pipes.keys():
+            self.pipe_sensors[key] = {
+                'pressure_sensor': PipePressureSensor(),
+                'temperature_sensor': PipeTemperatureSensor()
+            }
+
+        #Маслосистема
+        self.oil_sensors = {}
+        for i in range(len(self.oil_systems)):
+            self.oil_sensors[i] = {
+                'flow_sensor': OilFlowSensor(),
+                'temperature_sensor': OilTemperatureSensor(),
+            }
+
+        #Маслобак
+        self.tank_sensors = {}
+        for i, oil_system in enumerate(self.oil_systems):
+            tank = oil_system.tank
+            self.tank_sensors[i] = {
+                'level_sensor': TankLevelSensor(volume_max=tank.volume_max),
+                'density_sensor': TankDensitySensor(),
+                'temperature_sensor': TankTemperatureSensor(),
+                'flow_sensor': TankFlowRateSensor() 
+            }        
+
+        #Переменные для хранения значений с датчиков
+        #Задвижки
+        self.valve_sensor_values = {}
+        for key in self.valves.keys():
+            self.valve_sensor_values[key] = {
+                'temperature_current_mA': 0.0,
+                'pressure_current_mA': 0.0,
+                'position_current_mA': 0.0
+            }
+
+        #Насосы
+        self.pump_sensor_values = {}
+        for pump_id in range(len(self.pumps)):
+            self.pump_sensor_values[pump_id] = {
+            'bearing_work_temp_current_mA': 0.0,
+            'bearing_field_temp_current_mA': 0.0,
+            'motor_bearing_work_temp_current_mA': 0.0,
+            'motor_bearing_field_temp_current_mA': 0.0,
+            'hydro_support_temp_current_mA': 0.0,
+            'pressure_current_mA': 0.0,
+            'motor_current_current_mA': 0.0,
+            'flow_current_mA': 0.0,
+            'shaft_speed_current_mA': 0.0
+            }
+
+        #Трубы
+        self.pipe_sensor_values = {}
+        for key in self.pipes.keys():
+            self.pipe_sensor_values[key] = {
+                'pressure_current_mA': 0.0,
+                'temperature_current_mA': 0.0
+            }
+
+        #Маслосистема
+        self.oil_sensor_values = {}
+        for i in range(len(self.oil_systems)):
+            self.oil_sensor_values[i] = {
+                'flow_current_mA': 0.0,
+                'temperature_current_mA': 0.0,
+            }
+
+        #Маслобак
+        self.tank_sensor_values = {}
+        for i in range(len(self.oil_systems)):
+            self.tank_sensor_values[i] = {
+                'level_current_mA': 0.0,
+                'density_current_mA': 0.0,
+                'temperature_current_mA': 0.0,
+                'flow_current_mA': 0.0
+            }
+
         # Таймер для обновления состояния
         self.last_update_time = time.time()
 
@@ -99,6 +208,13 @@ class BKNS:
             temperature=self.inlet_temperature  # Температура жидкости на входе
         )
 
+        #Пока что так, дальше надо будет корректировать !
+        inlet_signals = [True, True, True, True]
+        outlet_signals = [True, True, True, True]
+        inflow_rates = [1.0, 1.0, 1.0, 1.0]
+        outflow_rates = [1.0, 1.0, 1.0, 1.0]
+
+
         # Обновляем маслосистемы с учётом команд запуска/остановки маслонасосов
         # Важно: маслосистема запускается только по команде, без автоматического запуска
         for pump_id, oil_system in enumerate(self.oil_systems):
@@ -108,7 +224,11 @@ class BKNS:
                 command_main_stop=cmd['stop'],
                 command_reserve_run=False,  # Резервный маслонасос всегда выключен
                 command_reserve_stop=True,
-                dt=dt
+                dt=dt,
+                inlet_signals=inlet_signals, 
+                outlet_signals=outlet_signals, 
+                inflow_rates=inflow_rates,
+                outflow_rates=outflow_rates
             )
 
         # Обновляем насосы, трубы и задвижки
@@ -131,16 +251,21 @@ class BKNS:
             )
                 
             # Обновляем насос
+            in_cv = in_valve.get_opening_coefficient()
+            p_after_in_valve = in_pipe.p_out * in_cv 
+            out_cv = out_valve.get_opening_coefficient()
+            p_before_out_pipe = pump.p_out * out_cv
+            valve_flow_factor = min(in_cv, out_cv)
             target_omega = pump.reference_shaft_speed if pump.na_on else 0.0
-            q = pump.nominal_capacity * 0.8  # Рабочий расход (80% от номинального)
+            q = pump.nominal_capacity * 0.8 * valve_flow_factor
             # Получаем состояния задвижек (True - открыта, False - закрыта)
-            inlet_open = self.valves[f'in_{pump_id}'].state == "open"
-            outlet_open = self.valves[f'out_{pump_id}'].state == "open"
+            inlet_open = in_valve.state == "open" or  in_valve.state == "moving" or in_valve.state == "stopped"  # можно считать двигающуюся задвижку частично открытой
+            outlet_open = out_valve.state == "open" or out_valve.state == "moving"
             pump.step(target_omega, q, self.rho, inlet_open, outlet_open)
                 
             # Обновляем давление и температуру в выходной трубе
             out_pipe.compute_output_pressure(
-                p_in=pump.p_out,
+                p_in=p_before_out_pipe,
                 m_dot_A=self.m_dot_A,
                 m_dot_B=self.m_dot_B,
                 mu=self.mu,
@@ -172,6 +297,81 @@ class BKNS:
             temperature=avg_temp
         )
         
+        #Обновление данных на датчиках
+        #Задвижки
+        for key, sensors in self.valve_sensors.items():
+            valve = self.valves[key]
+
+            temp_current = sensors['temperature_sensor'].measure_current(valve.temperature)
+            pressure_current = sensors['pressure_sensor'].measure_current(valve.pressure)
+            position_current = sensors['position_sensor'].measure_current(valve.current_position)
+
+            self.valve_sensor_values[key]['temperature_current_mA'] = temp_current
+            self.valve_sensor_values[key]['pressure_current_mA'] = pressure_current
+            self.valve_sensor_values[key]['position_current_mA'] = position_current
+
+        #Насосы
+        for pump_id, sensors in self.pump_sensors.items():
+            pump = self.pumps[pump_id]
+
+            bearing_work_temp_current = sensors['bearing_work_temp_sensor'].measure_current(pump.NA_AI_T_1_n)
+            bearing_field_temp_current = sensors['bearing_field_temp_sensor'].measure_current(pump.NA_AI_T_2_n)
+            motor_bearing_work_temp_current = sensors['motor_bearing_work_temp_sensor'].measure_current(pump.NA_AI_T_3_n)
+            motor_bearing_field_temp_current = sensors['motor_bearing_field_temp_sensor'].measure_current(pump.NA_AI_T_4_n)
+            hydro_support_temp_current = sensors['hydro_support_temp_sensor'].measure_current(pump.NA_AI_T_5_n)
+            pressure_current = sensors['pressure_sensor'].measure_current(pump.p_out)
+            motor_current_current = sensors['motor_current_sensor'].measure_current(pump.current_motor_i)
+            flow_current = sensors['flow_sensor'].measure_current(pump.NA_AI_Qmom_n)
+            shaft_speed_current = sensors['shaft_speed_sensor'].measure_current(pump.current_omega)
+
+            self.pump_sensor_values[pump_id]['bearing_work_temp_current_mA'] = bearing_work_temp_current
+            self.pump_sensor_values[pump_id]['bearing_field_temp_current_mA'] = bearing_field_temp_current
+            self.pump_sensor_values[pump_id]['motor_bearing_work_temp_current_mA'] = motor_bearing_work_temp_current
+            self.pump_sensor_values[pump_id]['motor_bearing_field_temp_current_mA'] = motor_bearing_field_temp_current
+            self.pump_sensor_values[pump_id]['hydro_support_temp_current_mA'] = hydro_support_temp_current
+
+            self.pump_sensor_values[pump_id]['pressure_current_mA'] = pressure_current
+            self.pump_sensor_values[pump_id]['motor_current_current_mA'] = motor_current_current
+            self.pump_sensor_values[pump_id]['flow_current_mA'] = flow_current
+            self.pump_sensor_values[pump_id]['shaft_speed_current_mA'] = shaft_speed_current
+
+
+        #Трубы
+        for key, sensors in self.pipe_sensors.items():
+            pipe = self.pipes[key]
+
+            pressure_current = sensors['pressure_sensor'].measure_current(pipe.p_out)
+            temperature_current = sensors['temperature_sensor'].measure_current(pipe.T)
+
+            self.pipe_sensor_values[key]['pressure_current_mA'] = pressure_current
+            self.pipe_sensor_values[key]['temperature_current_mA'] = temperature_current           
+
+        #Маслосистема
+        for i, oil_system in enumerate(self.oil_systems):
+            sensors = self.oil_sensors[i]
+
+            flow_current = sensors['flow_sensor'].measure_current(oil_system.flow_rate)
+            temperature_current = sensors['temperature_sensor'].measure_current(oil_system.temperature)
+            
+            self.oil_sensor_values[i]['flow_current_mA'] = flow_current
+            self.oil_sensor_values[i]['temperature_current_mA'] = temperature_current
+
+
+        #Маслобак
+        for i, oil_system in enumerate(self.oil_systems):
+            tank = oil_system.tank
+            sensors = self.tank_sensors[i]
+
+            level_current = sensors['level_sensor'].measure_current(tank.level_radar)
+            density_current = sensors['density_sensor'].measure_current(tank.density_meter)
+            temperature_current = sensors['temperature_sensor'].measure_current(tank.temperature_sensor)
+            flow_current = sensors['flow_sensor'].measure_current(tank.flow_meter)
+
+            self.tank_sensor_values[i]['level_current_mA'] = level_current
+            self.tank_sensor_values[i]['density_current_mA'] = density_current
+            self.tank_sensor_values[i]['temperature_current_mA'] = temperature_current
+            self.tank_sensor_values[i]['flow_current_mA'] = flow_current
+
     def control_pump(self, pump_id: int, start: bool):
         """
         Управление насосом (включение/выключение)
@@ -200,88 +400,126 @@ class BKNS:
         self.oil_pump_commands[pump_id]['start'] = start
         self.oil_pump_commands[pump_id]['stop'] = not start
 
-    def control_valve(self, valve_key: str, open_valve: bool):
+    def control_valve(self, valve_key: str, command_or_bool):
         """
         Управление задвижкой
         """
         if valve_key not in self.valves:
             raise ValueError(f"Invalid valve lock key: {valve_key}")
         valve = self.valves[valve_key]
-        if open_valve:
-            valve.control("open")
+        if isinstance(command_or_bool, bool):
+            command = "open" if command_or_bool else "close"
+        elif isinstance(command_or_bool, str):
+            if command_or_bool not in ("open", "close", "stop"):
+                raise ValueError(f"Invalid valve control command: {command_or_bool}")
+            command = command_or_bool
         else:
-            valve.control("close")
-    
-    # Вставьте этот код в класс BKNS, заменив старую версию get_status
+            raise TypeError("command_or_bool must be of type str or bool")
 
+        valve.control(command)
+    
+    
+    
     def get_status(self) -> Dict:
         """
-        Возвращает текущее состояние системы в виде словаря.
-        Доработан для полного соответствия с OPC_NODE_MAPPING.
+        Возвращает состояние системы в структуре, ожидаемой OPC и flatten_status_for_opc().
         """
-        status = {
-            'pumps': {},
-            'valves': {},
-            'pipes': {},
-            'oil_systems': {},
-            'alarms': {},
-            'active_alarms': [],
-            'inlet_conditions': {
-                'pressure': self.inlet_pressure,
-                'temperature': self.inlet_temperature,
-            }
-        }
-        
-        # Собираем данные по каждому насосу
+        status = {}
+
         for pump_id, pump in enumerate(self.pumps):
-            # Входное давление для насоса берем из соответствующей входной трубы
-            inlet_pipe_pressure = self.pipes[f'in_{pump_id}'].p_out
-
-            status['pumps'][str(pump_id)] = {
-                "is_running": pump.na_on,
-                "is_off": not pump.na_on,  # <-- ДОБАВЛЕНО: Инверсия от 'is_running'
-                "speed": pump.current_omega,
-                "current": pump.current_motor_i,
-                "pressure_in": inlet_pipe_pressure, # <-- ДОБАВЛЕНО: Давление на входе в насос
-                "outlet_pressure": pump.p_out,
+            status[f"pump_{pump_id}"] = {
+                "na_on": pump.na_on,
+                "na_off": pump.na_off,
+                "motor_current": pump.current_motor_i,
+                "pressure_in": self.pipes[f"in_{pump_id}"].p_out,
+                "pressure_out": pump.p_out,
                 "flow_rate": pump.NA_AI_Qmom_n,
-                "di_kojuh_status": True,  # <-- ДОБАВЛЕНО: Заглушка, т.к. нет логики в модели
-                "temperatures": {
-                    "T2": pump.NA_AI_T_2_n,
-                    "T3": pump.NA_AI_T_3_n,
-                    "T4": pump.NA_AI_T_4_n,
-                    "T5": pump.NA_AI_T_5_n,
-                },
-            }
-        
-        for valve_key, valve in self.valves.items():
-            status['valves'][valve_key] = {
-                "is_open": valve.state == "open",
-                "is_closed": valve.state == "closed", # <-- ДОБАВЛЕНО
-                "is_moving": valve.is_moving,
-                "target_state": valve.target_position == 100.0,
-                "pressure": valve.pressure,
-                "temperature": valve.temperature,
+                "temp_bearing_1": pump.NA_AI_T_2_n,
+                "temp_bearing_2": pump.NA_AI_T_1_n,
+                "temp_motor_1": pump.NA_AI_T_3_n,
+                "temp_motor_2": pump.NA_AI_T_4_n,
+                "temp_water": pump.NA_AI_T_5_n,
+                "cover_open": True
             }
 
-        for pipe_key, pipe in self.pipes.items():
-            status['pipes'][pipe_key] = {
-                "pressure": pipe.p_out,
-                "temperature": pipe.T
-            }
-
-        for pump_id, oil_system in enumerate(self.oil_systems):
-            status['oil_systems'][str(pump_id)] = {
-                "is_running": oil_system.running,
-                "pressure": oil_system.pressure,
-                "flow_rate": oil_system.flow_rate,
+        for i, oil_system in enumerate(self.oil_systems):
+            status[f"oil_system_{i}"] = {
+                "oil_sys_running": oil_system.running,
+                "oil_sys_pressure_ok": oil_system.pressure_ok,
+                "oil_pressure": oil_system.pressure,
                 "temperature": oil_system.temperature,
-                "viscosity": oil_system.viscosity,
-                "pressure_ok": oil_system.pressure_ok, # Используется для тега DI_FL_MS
             }
+
+        for valve_key, valve in self.valves.items():
+            if valve_key.startswith("out_"):
+                idx = valve_key[-1]
+                status[f"valve_out_{idx}"] = {
+                    "valve_open": valve.state == "open",
+                    "valve_closed": valve.state == "closed"
+                }
 
         return status
-    
+
+
+    def _format_sensors_table(self, status: Dict) -> str:
+        lines = []
+        lines.append("=== Датчики (ток 4-20 мА) ===\n")
+
+        # Задвижки
+        lines.append(f"{'Valve':<8} {'Temp':>6} {'Pres':>6} {'Pos':>6}")
+        for key, val in status['valve_sensors'].items():
+            lines.append(f"{key:<8} "
+                        f"{val['temperature_current_mA']:6.2f} "
+                        f"{val['pressure_current_mA']:6.2f} "
+                        f"{val['position_current_mA']:6.2f}")
+        lines.append("")
+
+        # Насосы
+        lines.append(f"{'PumpID':<6} {'T1':>6} {'T2':>6} {'T3':>6} {'T4':>6} {'Hydro':>6} {'Pres':>6} {'MotorI':>7} {'Flow':>6} {'Speed':>6}")
+        for pump_id, val in status['pump_sensors'].items():
+            lines.append(f"{pump_id:<6} "
+                        f"{val['bearing_work_temp_current_mA']:6.2f} "
+                        f"{val['bearing_field_temp_current_mA']:6.2f} "
+                        f"{val['motor_bearing_work_temp_current_mA']:6.2f} "
+                        f"{val['motor_bearing_field_temp_current_mA']:6.2f} "
+                        f"{val['hydro_support_temp_current_mA']:6.2f} "
+                        f"{val['pressure_current_mA']:6.2f} "
+                        f"{val['motor_current_current_mA']:7.2f} "
+                        f"{val['flow_current_mA']:6.2f} "
+                        f"{val['shaft_speed_current_mA']:6.2f}")
+        lines.append("")
+
+        # Трубы
+        lines.append(f"{'Pipe':<10} {'Pres':>6} {'Temp':>6}")
+        for key, val in status['pipe_sensors'].items():
+            lines.append(f"{key:<10} "
+                        f"{val['pressure_current_mA']:6.2f} "
+                        f"{val['temperature_current_mA']:6.2f}")
+        lines.append("")
+
+        # Маслосистемы
+        lines.append(f"{'OilSys':<6} {'Flow':>6} {'Temp':>6}")
+        for i, val in status['oil_sensors'].items():
+            lines.append(f"{i:<6} "
+                        f"{val['flow_current_mA']:6.2f} "
+                        f"{val['temperature_current_mA']:6.2f}")
+        lines.append("")
+
+        # Маслобаки
+        lines.append(f"{'Tank':<6} {'Level':>6} {'Density':>8} {'Temp':>6} {'Flow':>6}")
+        for i, val in status['tank_sensors'].items():
+            lines.append(f"{i:<6} "
+                        f"{val['level_current_mA']:6.2f} "
+                        f"{val['density_current_mA']:8.2f} "
+                        f"{val['temperature_current_mA']:6.2f} "
+                        f"{val['flow_current_mA']:6.2f}")
+        lines.append("")
+
+        return "\n".join(lines)
+
+
+
+
     def __str__(self):
         """
         Возвращает текстовое представление состояния системы.
@@ -324,85 +562,88 @@ class BKNS:
                 f"  Расход: {pump_data['flow_rate']:.3f} м³/с\n"
             )
         
+        output.append("")
+        # Добавляем таблицу с датчиками
+        output.append(self._format_sensors_table(status))
         return "\n".join(output)
 
 import time
 import sys
 
-# log_file = open("Пример.log", "w", encoding="utf-8")
-# sys.stdout = log_file
-# if __name__ == "__main__":
+#log_file = open("Пример.log", "w", encoding="utf-8")
+#sys.stdout = log_file
+if __name__ == "__main__":
 
-#     # Инициализация системы БКНС с параметрами по умолчанию:
-#     bkns = BKNS()
+    # Инициализация системы БКНС с параметрами по умолчанию:
+    bkns = BKNS()
     
-#     # Открываем все задвижки насосов NA4 и NA2
-#     bkns.control_valve('in_0', True)
-#     bkns.control_valve('out_0', True)
-#     bkns.control_valve('in_1', True)
-#     bkns.control_valve('out_1', True)
+    # Открываем все задвижки насосов NA4 и NA2
+    bkns.control_valve('in_0', True)
+    bkns.control_valve('out_0', True)
+    bkns.control_valve('in_1', True)
+    bkns.control_valve('out_1', True)
 
-#     # Запускаем маслонасосы для обоих насосов
-#     bkns.control_oil_pump(0, True)
-#     bkns.control_oil_pump(1, True)
+    # Запускаем маслонасосы для обоих насосов
+    bkns.control_oil_pump(0, True)
+    bkns.control_oil_pump(1, True)
 
-#     print("=== Начало симуляции БКНС ===")
-#     try:
-#         for i in range(45):  # Увеличиваем длительность для демонстрации новых сценариев
-#             bkns.update_system()
-#             print(f"\n=== Состояние БКНС через {i} секунд ===")
-#             print(bkns)
+    print("=== Начало симуляции БКНС ===")
+    try:
+        for i in range(45):  # Увеличиваем длительность для демонстрации новых сценариев
+            bkns.update_system()
+            print(f"\n=== Состояние БКНС через {i} секунд ===")
+            print(bkns)
 
-#             # --- Режимы работы одного насоса (NA4) ---
-#             if i == 5:
-#                 print("\n>>> Запускаем насос NA4")
-#                 bkns.control_pump(0, True)
-#             if i == 10:
-#                 print("\n>>> Закрываем выходную задвижку NA4")
-#                 bkns.control_valve('out_0', False)
-#             if i == 14:
-#                 print("\n>>> Повторная попытка закрыть выходную задвижку NA4")
-#                 bkns.control_valve('out_0', False)
-#             if i == 16:
-#                 print("\n>>> Открываем выходную задвижку NA4")
-#                 bkns.control_valve('out_0', True)
-#             if i == 18:
-#                 print("\n>>> Останавливаем насос NA4")
-#                 bkns.control_pump(0, False)
-#             if i == 20:
-#                 print("\n>>> Останавливаем маслонасос NA4")
-#                 bkns.control_oil_pump(0, False)
+            # --- Режимы работы одного насоса (NA4) ---
+            if i == 5:
+                print("\n>>> Запускаем насос NA4")
+                bkns.control_pump(0, True)
+            if i == 10:
+                print("\n>>> Закрываем выходную задвижку NA4")
+                bkns.control_valve('out_0', False)
+            if i == 14:
+                print("\n>>> Повторная попытка закрыть выходную задвижку NA4")
+                bkns.control_valve('out_0', False)
+            if i == 16:
+                print("\n>>> Открываем выходную задвижку NA4")
+                bkns.control_valve('out_0', True)
+            if i == 18:
+                print("\n>>> Останавливаем насос NA4")
+                bkns.control_pump(0, False)
+            if i == 20:
+                print("\n>>> Останавливаем маслонасос NA4")
+                bkns.control_oil_pump(0, False)
 
-#             # --- Работа двух насосов одновременно ---
-#             if i == 22:
-#                 print("\n>>> Запускаем насос NA4 и насос NA2 одновременно")
-#                 bkns.control_pump(0, True)
-#                 bkns.control_pump(1, True)
-#                 bkns.control_oil_pump(0, True)
-#                 bkns.control_oil_pump(1, True)
-#             if i == 25:
-#                 print("\n>>> Закрываем входную задвижку NA2 (симуляция 'закрыта входная')")
-#                 bkns.control_valve('in_1', False)
-#             if i == 28:
-#                 print("\n>>> Открываем входную задвижку NA2")
-#                 bkns.control_valve('in_1', True)
+            # --- Работа двух насосов одновременно ---
+            if i == 22:
+                print("\n>>> Запускаем насос NA4 и насос NA2 одновременно")
+                bkns.control_pump(0, True)
+                bkns.control_pump(1, True)
+                bkns.control_oil_pump(0, True)
+                bkns.control_oil_pump(1, True)
+            if i == 25:
+                print("\n>>> Закрываем входную задвижку NA2 (симуляция 'закрыта входная')")
+                bkns.control_valve('in_1', False)
+            if i == 28:
+                print("\n>>> Открываем входную задвижку NA2")
+                bkns.control_valve('in_1', True)
 
-#             # --- Работа насоса без масла (маслосистема выключена) ---
-#             if i == 30:
-#                 print("\n>>> Останавливаем маслонасос NA2 (симуляция работы насоса без масла)")
-#                 bkns.control_oil_pump(1, False)
-#             if i == 32:
-#                 print("\n>>> Останавливаем насос NA2")
-#                 bkns.control_pump(1, False)
-#             if i == 35:
-#                 print("\n>>> Запускаем насос NA2 без маслонасоса (опасный режим!)")
-#                 bkns.control_pump(1, True)
-#             if i == 40:
-#                 print("\n>>> Запускаем маслонасос NA2")
-#                 bkns.control_oil_pump(1, True)
+            # --- Работа насоса без масла (маслосистема выключена) ---
+            if i == 30:
+                print("\n>>> Останавливаем маслонасос NA2 (симуляция работы насоса без масла)")
+                bkns.control_oil_pump(1, False)
+            if i == 32:
+                print("\n>>> Останавливаем насос NA2")
+                bkns.control_pump(1, False)
+            if i == 35:
+                print("\n>>> Запускаем насос NA2 без маслонасоса (опасный режим!)")
+                bkns.control_pump(1, True)
+            if i == 40:
+                print("\n>>> Запускаем маслонасос NA2")
+                bkns.control_oil_pump(1, True)
 
-#             time.sleep(1)
+            time.sleep(1)
 
-#     except KeyboardInterrupt:
-#         print("\nСимуляция остановлена пользователем")
-# log_file.close()
+    except KeyboardInterrupt:
+        print("\nСимуляция остановлена пользователем")
+#log_file.close()
